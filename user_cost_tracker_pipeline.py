@@ -60,7 +60,7 @@ class UserCostTracker:
 
     def _write_costs(self, costs):
         with open(self.cost_file_path, "w", encoding="UTF-8") as cost_file:
-            json.dump(costs, cost_file, indent=4, float_format=lambda x: "%.6f" % x)
+            json.dump(costs, cost_file, indent=4)
 
     def update_user_cost(self, user_email, model, input_tokens, output_tokens, cost):
         costs = self._read_costs()
@@ -80,7 +80,7 @@ class UserCostTracker:
                     "timestamp": timestamp,
                     "input_tokens": input_tokens,
                     "output_tokens": output_tokens,
-                    "cost": cost,
+                    "cost": lambda cost: "%.6f" % cost,
                 }
             )
 
