@@ -99,7 +99,7 @@ class Pipeline:
         output_dir = os.path.dirname(__file__)
         self.valves = self.Valves(
             **{
-                "pipelines": "*",
+                "pipelines": ["*"],
                 "priority": 3,
                 "cost_file": os.path.normpath(os.path.join(output_dir, "user_costs.json")),
             }
