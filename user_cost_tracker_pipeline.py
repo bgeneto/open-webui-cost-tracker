@@ -2,7 +2,7 @@
 title: User Cost Tracker
 description: This valve tracks user token usage and cost of all LLM models and outputs the cost and tokens to a json file.
 author: bgeneto
-version: 0.3.1
+version: 0.3.2
 license: MIT
 requirements: pydantic, requests, tiktoken
 environment_variables:
@@ -45,9 +45,11 @@ class ModelPricing:
 
 
 class UserCostTracker:
+
     def __init__(self, cost_file_path):
         self.cost_file_path = cost_file_path
         self._ensure_cost_file_exists()
+        self.decimals = "0.000001"
 
     def _ensure_cost_file_exists(self):
         if not os.path.exists(self.cost_file_path):
@@ -72,15 +74,15 @@ class UserCostTracker:
         # Round the cost to 6 decimal places
         cost = round(cost, 6)
 
-        # If the cost is less than 0.000001, consider it as zero and don't write it to the file
-        if cost >= 0.000001:
+        # If the cost is less than threshold, consider it as zero and don't write it to the file
+        if cost >= float(self.decimals):
             costs[user_email].append(
                 {
                     "model": model,
                     "timestamp": timestamp,
                     "input_tokens": input_tokens,
                     "output_tokens": output_tokens,
-                    "cost": lambda cost: "%.6f" % cost,
+                    "cost": "%.6f" % cost,
                 }
             )
 
@@ -101,7 +103,9 @@ class Pipeline:
             **{
                 "pipelines": ["*"],
                 "priority": 3,
-                "cost_file": os.path.normpath(os.path.join(output_dir, "user_costs.json")),
+                "cost_file": os.path.normpath(
+                    os.path.join(output_dir, "user_costs.json")
+                ),
             }
         )
         json_file_path = os.path.join(
@@ -202,7 +206,9 @@ class Pipeline:
             total_cost = input_cost + output_cost
 
             # Round the total cost to a given decimal places for monetary values
-            total_cost = total_cost.quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
+            total_cost = total_cost.quantize(
+                Decimal(self.user_cost_tracker.decimals), rounding=ROUND_HALF_UP
+            )
 
             if user:
                 user_email = user.get("email")
