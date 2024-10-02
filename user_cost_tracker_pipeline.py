@@ -82,7 +82,7 @@ class UserCostTracker:
                     "timestamp": timestamp,
                     "input_tokens": input_tokens,
                     "output_tokens": output_tokens,
-                    "cost": "%.6f" % cost,
+                    "cost": cost,
                 }
             )
 
