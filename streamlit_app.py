@@ -4,10 +4,14 @@ import pandas as pd
 import streamlit as st
 from datetime import datetime
 
-def load_data(file_name):
+def load_data(file):
     """Load data from a JSON file."""
-    with open(file_name, 'r') as file:
-        return json.load(file)
+    try:
+        data = json.load(file)
+        return data
+    except json.JSONDecodeError:
+        st.error("Invalid JSON file. Please upload a valid JSON file.")
+        return None
 
 def process_data(data):
     """Process the data by extracting the month, model, cost, and user."""
@@ -43,12 +47,15 @@ def plot_data(data, month):
 
 def main():
     st.title("Cost Analysis App")
-    data = load_data('user_costs.json')
-    processed_data = process_data(data)
-    months = processed_data['month'].unique()
-    month = st.selectbox("Select a month", months)
-    if st.button("Plot Data"):
-        plot_data(processed_data, month)
+    file = st.file_uploader("Upload a JSON file", type=["json"])
+    if file is not None:
+        data = load_data(file)
+        if data is not None:
+            processed_data = process_data(data)
+            months = processed_data['month'].unique()
+            month = st.selectbox("Select a month", months)
+            if st.button("Plot Data"):
+                plot_data(processed_data, month)
 
 if __name__ == "__main__":
     main()
