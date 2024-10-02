@@ -46,7 +46,8 @@ def plot_data(data, month):
     st.plotly_chart(fig_users, use_container_width=True)
 
 def main():
-    st.title("Cost Analysis App")
+    st.title("Open Webui")
+    st.subtitle("User Cost Tracker App")
     file = st.file_uploader("Upload a JSON file", type=["json"])
     if file is not None:
         data = load_data(file)
