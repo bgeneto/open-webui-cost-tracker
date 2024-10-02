@@ -47,7 +47,7 @@ def plot_data(data, month):
 
 def main():
     st.title("Open Webui")
-    st.subtitle("User Cost Tracker App")
+    st.subheader("User Cost Tracker App", divider=False)
     file = st.file_uploader("Upload a JSON file", type=["json"])
     if file is not None:
         data = load_data(file)
