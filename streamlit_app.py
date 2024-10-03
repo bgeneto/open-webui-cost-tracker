@@ -21,28 +21,29 @@ def process_data(data):
             timestamp = datetime.strptime(record['timestamp'], '%Y-%m-%dT%H:%M:%S.%f')
             month = timestamp.strftime('%Y-%m')
             model = record['model']
-            cost = record['cost']
+            cost = record['total_cost']
+            total_tokens = record['input_tokens'] + record['output_tokens']
             processed_data.append({
                 'month': month,
                 'model': model,
-                'cost': cost,
-                'user': user
+                'total_cost': cost,
+                'user': user,
+                'total_tokens': total_tokens
             })
     return pd.DataFrame(processed_data)
 
 def plot_data(data, month):
     """Plot the data for a specific month."""
     month_data = data[data['month'] == month]
-    month_data_models = month_data.groupby('model')['cost'].sum().reset_index()
-    month_data_models['total'] = month_data_models['cost'].sum()
-    month_data_models = pd.concat([month_data_models, pd.DataFrame({'model': ['Total'], 'cost': [month_data_models['total'].iloc[0]]})])
-    fig_models = px.bar(month_data_models, x='model', y='cost', title=f'Cost for {month} by Model')
+    month_data_models = month_data.groupby('model')['total_tokens'].sum().reset_index()
+    month_data_models = month_data_models.sort_values(by='total_tokens', ascending=False)
+    fig_models = px.bar(month_data_models, x='model', y='total_tokens', title=f'Total Tokens Used for {month} by Model')
     st.plotly_chart(fig_models, use_container_width=True)
 
-    month_data_users = month_data.groupby('user')['cost'].sum().reset_index()
-    month_data_users['total'] = month_data_users['cost'].sum()
-    month_data_users = pd.concat([month_data_users, pd.DataFrame({'user': ['Total'], 'cost': [month_data_users['total'].iloc[0]]})])
-    fig_users = px.bar(month_data_users, x='user', y='cost', title=f'Cost for {month} by User')
+    month_data_users = month_data.groupby('user')['total_cost'].sum().reset_index()
+    month_data_users['total'] = month_data_users['total_cost'].sum()
+    month_data_users = pd.concat([month_data_users, pd.DataFrame({'user': ['Total'], 'total_cost': [month_data_users['total'].iloc[0]]})])
+    fig_users = px.bar(month_data_users, x='user', y='total_cost', title=f'Cost for {month} by User')
     st.plotly_chart(fig_users, use_container_width=True)
 
 def main():
