@@ -4,7 +4,7 @@ description: This function is designed to manage and calculate the costs associa
 author: bgeneto
 author_url: https://github.com/bgeneto/open-webui-cost-tracker
 funding_url: https://github.com/open-webui
-version: 0.1.5
+version: 0.1.7
 license: MIT
 requirements: requests, tiktoken, cachetools, pydantic
 environment_variables:
@@ -212,7 +212,6 @@ class Filter:
         compensation: float = Field(
             default=1.0, description="Compensation for price calculation (percent)"
         )
-        debug: bool = Field(default=False, description="Display debugging messages")
         elapsed_time: bool = Field(default=True, description="Display the elapsed time")
         number_of_tokens: bool = Field(
             default=True, description="Display total number of tokens"
@@ -220,9 +219,12 @@ class Filter:
         tokens_per_sec: bool = Field(
             default=True, description="Display tokens per second metric"
         )
+        debug: bool = Field(default=False, description="Display debugging messages")
+        pass
 
     def __init__(self):
         self.valves = self.Valves()
+        Config.DEBUG = self.valves.debug
         self.model_cost_manager = ModelCostManager()
         self.user_cost_manager = UserCostManager(Config.USER_COST_FILE)
         self.cost_calculator = CostCalculator(
@@ -230,6 +232,7 @@ class Filter:
         )
         self.start_time = None
         self.input_tokens = 0
+        pass
 
     def _sanitize_model_name(self, model):
         name = model
@@ -269,6 +272,8 @@ class Filter:
         __event_emitter__: Callable[[Any], Awaitable[None]] = None,
         __model__: Optional[dict] = None,
     ) -> dict:
+        Config.DEBUG = self.valves.debug
+        print("---> DEBUG: ", Config.DEBUG)
         model, enc = self._get_model_and_encoding(body)
         input_content = self._remove_roles(
             get_messages_content(body["messages"])
