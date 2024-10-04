@@ -273,7 +273,6 @@ class Filter:
         __model__: Optional[dict] = None,
     ) -> dict:
         Config.DEBUG = self.valves.debug
-        print("---> DEBUG: ", Config.DEBUG)
         model, enc = self._get_model_and_encoding(body)
         input_content = self._remove_roles(
             get_messages_content(body["messages"])
