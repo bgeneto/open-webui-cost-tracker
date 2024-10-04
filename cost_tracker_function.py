@@ -4,7 +4,7 @@ description: This function is designed to manage and calculate the costs associa
 author: bgeneto
 author_url: https://github.com/bgeneto/open-webui-cost-tracker
 funding_url: https://github.com/open-webui
-version: 0.1.4
+version: 0.1.5
 license: MIT
 requirements: requests, tiktoken, cachetools, pydantic
 environment_variables:
@@ -34,7 +34,7 @@ class Config:
     CACHE_DIR = os.path.join(DATA_DIR, ".cache")
     USER_COST_FILE = os.path.join(DATA_DIR, f"costs-{datetime.now().year}.json")
     CACHE_TTL = 432000  # try to keep model pricing json file for 5 days in the cache.
-    CACHE_MAXSIZE = 2
+    CACHE_MAXSIZE = 16
     DECIMALS = "0.000001"
     DEBUG = False
 
@@ -48,7 +48,7 @@ def get_encoding(model):
         return tiktoken.encoding_for_model(model)
     except KeyError:
         if Config.DEBUG:
-            print(f"**WARN: Encoding for model {model} not found. Using cl100k_base.")
+            print(f"**DEBUG: Encoding for model {model} not found. Using cl100k_base.")
         return tiktoken.get_encoding("cl100k_base")
 
 
@@ -134,10 +134,12 @@ class ModelCostManager:
                 self.cache_file_path
             ):
                 with open(self.cache_file_path, "r", encoding="UTF-8") as cache_file:
-                    print("**DEBUG: Reading costs json file!")
+                    if Config.DEBUG:
+                        print("**DEBUG: Reading costs json file!")
                     return json.load(cache_file)
         try:
-            print("**DEBUG: Downloading model costs json file!")
+            if Config.DEBUG:
+                print("**DEBUG: Downloading model costs json file!")
             response = requests.get(self.url)
             response.raise_for_status()
             data = response.json()
@@ -151,7 +153,8 @@ class ModelCostManager:
 
             with self.lock:
                 with open(self.cache_file_path, "w", encoding="UTF-8") as cache_file:
-                    print("**DEBUG: Writing costs to json file!")
+                    if Config.DEBUG:
+                        print("**DEBUG: Writing costs to json file!")
                     json.dump(data, cache_file)
 
             return data
@@ -164,7 +167,8 @@ class ModelCostManager:
                     with open(
                         self.cache_file_path + ".bkp", "r", encoding="UTF-8"
                     ) as cache_file:
-                        print("**DEBUG: Reading costs json file from backup!")
+                        if Config.DEBUG:
+                            print("**DEBUG: Reading costs json file from backup!")
                         return json.load(cache_file)
                 else:
                     raise e
@@ -182,6 +186,9 @@ class CostCalculator:
 
     def calculate_costs(self, model, input_tokens, output_tokens, compensation):
         model_pricing_data = self.model_cost_manager.get_model_data(model)
+        if not model_pricing_data:
+            if Config.DEBUG:
+                print(f"**DEBUG: Model {model} not found in costs json file!")
         input_cost_per_token = Decimal(
             str(model_pricing_data.get("input_cost_per_token", 0))
         )
@@ -303,7 +310,7 @@ class Filter:
             if "email" in __user__:
                 user_email = __user__["email"]
             else:
-                print("**WARN: User email not found!")
+                print("**ERROR: User email not found!")
             try:
                 self.user_cost_manager.update_user_cost(
                     user_email,
@@ -315,7 +322,7 @@ class Filter:
             except Exception as _:
                 print("**ERROR: Unable to update user cost file!")
         else:
-            print("**WARN: User not found!")
+            print("**ERROR: User not found!")
 
         tokens = self.input_tokens + output_tokens
         tokens_per_sec = tokens / elapsed_time
