@@ -4,10 +4,13 @@ description: This function is designed to manage and calculate the costs associa
 author: bgeneto
 author_url: https://github.com/bgeneto/open-webui-cost-tracker
 funding_url: https://github.com/open-webui
-version: 0.1.3
+version: 0.1.4
 license: MIT
 requirements: requests, tiktoken, cachetools, pydantic
 environment_variables:
+disclaimer: This function is provided as is without any guarantees.
+            It is your responsibility to ensure that the function meets your requirements.
+            All metrics and costs are approximate and may vary depending on the model and the usage.
 """
 
 import hashlib
@@ -130,28 +133,38 @@ class ModelCostManager:
             if os.path.exists(self.cache_file_path) and self._is_cache_valid(
                 self.cache_file_path
             ):
-                with open(self.cache_file_path, "r", encoding="utf-8") as cache_file:
+                with open(self.cache_file_path, "r", encoding="UTF-8") as cache_file:
+                    print("**DEBUG: Reading costs json file!")
                     return json.load(cache_file)
         try:
-            print("**DEBUG: Downloading model cost file!")
+            print("**DEBUG: Downloading model costs json file!")
             response = requests.get(self.url)
             response.raise_for_status()
             data = response.json()
 
+            # backup existing cache file
+            try:
+                if os.path.exists(self.cache_file_path):
+                    os.rename(self.cache_file_path, self.cache_file_path + ".bkp")
+            except Exception as e:
+                print(f"**ERROR: Failed to backup costs json file. Error: {e}")
+
             with self.lock:
-                with open(self.cache_file_path, "w", encoding="utf-8") as cache_file:
+                with open(self.cache_file_path, "w", encoding="UTF-8") as cache_file:
+                    print("**DEBUG: Writing costs to json file!")
                     json.dump(data, cache_file)
 
             return data
-        except requests.RequestException as e:
+        except Exception as e:
             print(
-                f"**ERROR: Failed to download file from {self.url}. Using cached file if available. Error: {e}"
+                f"**ERROR: Failed to download or write to costs json file. Using old cached file if available. Error: {e}"
             )
             with self.lock:
-                if os.path.exists(self.cache_file_path):
+                if os.path.exists(self.cache_file_path + ".bkp"):
                     with open(
-                        self.cache_file_path, "r", encoding="utf-8"
+                        self.cache_file_path + ".bkp", "r", encoding="UTF-8"
                     ) as cache_file:
+                        print("**DEBUG: Reading costs json file from backup!")
                         return json.load(cache_file)
                 else:
                     raise e
@@ -309,11 +322,11 @@ class Filter:
         stats_array = []
 
         if self.valves.elapsed_time:
-            stats_array.append(f"{elapsed_time:.2f} sec")
+            stats_array.append(f"{elapsed_time:.2f} s")
         if self.valves.tokens_per_sec:
             stats_array.append(f"{tokens_per_sec:.2f} T/s")
         if self.valves.number_of_tokens:
-            stats_array.append(f"{tokens} tokens")
+            stats_array.append(f"{tokens} Tokens")
 
         if float(total_cost) < float(Config.DECIMALS):
             stats_array.append(f"${total_cost:.2f}")
