@@ -8,6 +8,14 @@ The number of (input and output) tokens, price and other metrics are shown in th
 
 ![image](https://github.com/user-attachments/assets/ad373135-9ead-465f-adb1-d10f6262a705)
 
+## Install
+
+Remember to enable the function globally (or by model): 
+
+![image](https://github.com/user-attachments/assets/07cb5d0e-f6eb-4e5b-98dd-6d29510af972)
+
+## Streamlit App
+
 This repo also provides a streamlit app to read and process the generated `costs.json` file containing model usage data for every user. 
 The `costs-<year>.json` file is located in the open-webui `data` directory. 
 
