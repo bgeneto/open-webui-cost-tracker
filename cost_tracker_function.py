@@ -35,7 +35,7 @@ class Config:
     USER_COST_FILE = os.path.join(DATA_DIR, f"costs-{datetime.now().year}.json")
     CACHE_TTL = 432000  # try to keep model pricing json file for 5 days in the cache.
     CACHE_MAXSIZE = 16
-    DECIMALS = "0.000001"
+    DECIMALS = "0.00000001"
     DEBUG = False
 
 
