@@ -4,7 +4,7 @@ description: This function is designed to manage and calculate the costs associa
 author: bgeneto
 author_url: https://github.com/bgeneto/open-webui-cost-tracker
 funding_url: https://github.com/open-webui
-version: 0.1.7
+version: 0.1.8
 license: MIT
 requirements: requests, tiktoken, cachetools, pydantic
 environment_variables:
@@ -48,7 +48,9 @@ def get_encoding(model):
         return tiktoken.encoding_for_model(model)
     except KeyError:
         if Config.DEBUG:
-            print(f"**DEBUG: Encoding for model {model} not found. Using cl100k_base.")
+            print(
+                f"**DEBUG: Encoding for model {model} not found. Using cl100k_base for computing tokens."
+            )
         return tiktoken.get_encoding("cl100k_base")
 
 
@@ -272,8 +274,9 @@ class Filter:
         __event_emitter__: Callable[[Any], Awaitable[None]] = None,
         __model__: Optional[dict] = None,
     ) -> dict:
+
         Config.DEBUG = self.valves.debug
-        model, enc = self._get_model_and_encoding(body)
+        _, enc = self._get_model_and_encoding(body)
         input_content = self._remove_roles(
             get_messages_content(body["messages"])
         ).strip()
@@ -300,11 +303,29 @@ class Filter:
         __model__: Optional[dict] = None,
         __user__: Optional[dict] = None,
     ) -> dict:
+
         end_time = time.time()
         elapsed_time = end_time - self.start_time
 
+        await __event_emitter__(
+            {
+                "type": "status",
+                "data": {
+                    "description": "Computing number of output tokens...",
+                    "done": False,
+                },
+            }
+        )
+
         model, enc = self._get_model_and_encoding(body)
         output_tokens = len(enc.encode(get_last_assistant_message(body["messages"])))
+
+        await __event_emitter__(
+            {
+                "type": "status",
+                "data": {"description": "Computing total costs...", "done": False},
+            }
+        )
 
         total_cost = self.cost_calculator.calculate_costs(
             model, self.input_tokens, output_tokens, self.valves.compensation
