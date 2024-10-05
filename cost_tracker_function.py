@@ -1,6 +1,6 @@
 """
 title: Cost Tracker
-description: This function is designed to manage and calculate the costs associated with user interactions and model usage in a Open WebUI.
+description: This function calculates API interaction pricing in Open WebUI and records user model usage.
 author: bgeneto
 author_url: https://github.com/bgeneto/open-webui-cost-tracker
 funding_url: https://github.com/open-webui
