@@ -141,6 +141,7 @@ def plot_data(data: pd.DataFrame, month: str) -> None:
 
 
 def main():
+    st.set_page_config(layout="wide")
     st.title("Open Webui")
     st.subheader("Cost Tracker App", divider=False)
     st.page_link(
