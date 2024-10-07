@@ -82,6 +82,10 @@ def plot_data(data: pd.DataFrame, month: str) -> None:
     """
     month_data = data[data["month"] == month]
 
+    if month_data.empty:
+        st.error(f"No data available for {month}.")
+        return
+
     # ---------------------------------
     # Model Usage Bar Plot (Total Tokens)
     # ---------------------------------
