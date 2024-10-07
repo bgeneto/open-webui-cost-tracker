@@ -4,7 +4,7 @@ description: This function is designed to manage and calculate the costs associa
 author: bgeneto
 author_url: https://github.com/bgeneto/open-webui-cost-tracker
 funding_url: https://github.com/open-webui
-version: 0.1.9
+version: 0.2.1
 license: MIT
 requirements: requests, tiktoken, cachetools, pydantic
 environment_variables:
@@ -16,6 +16,7 @@ disclaimer: This function is provided as is without any guarantees.
 import hashlib
 import json
 import os
+import re
 import time
 from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
@@ -36,6 +37,8 @@ class Config:
     CACHE_TTL = 432000  # try to keep model pricing json file for 5 days in the cache.
     CACHE_MAXSIZE = 16
     DECIMALS = "0.00000001"
+    DEBUG_PREFIX = "DEBUG:    " + __name__ + " - "
+    INFO_PREFIX = "INFO:     " + __name__ + " - "
     DEBUG = False
 
 
@@ -49,7 +52,7 @@ def get_encoding(model):
     except KeyError:
         if Config.DEBUG:
             print(
-                f"**DEBUG: Encoding for model {model} not found. Using cl100k_base for computing tokens."
+                f"{Config.DEBUG_PREFIX} Encoding for model {model} not found. Using cl100k_base for computing tokens."
             )
         return tiktoken.get_encoding("cl100k_base")
 
@@ -100,6 +103,8 @@ class UserCostManager:
 
 
 class ModelCostManager:
+    _best_match_cache = {}
+
     def __init__(self, cache_dir=Config.CACHE_DIR):
         self.cache_dir = cache_dir
         self.lock = Lock()
@@ -142,11 +147,13 @@ class ModelCostManager:
             ):
                 with open(self.cache_file_path, "r", encoding="UTF-8") as cache_file:
                     if Config.DEBUG:
-                        print("**DEBUG: Reading costs json file!")
+                        print(
+                            f"{Config.DEBUG_PREFIX} Reading costs json file from disk!"
+                        )
                     return json.load(cache_file)
         try:
             if Config.DEBUG:
-                print("**DEBUG: Downloading model costs json file!")
+                print(f"{Config.DEBUG_PREFIX} Downloading model costs json file!")
             response = requests.get(self.url)
             response.raise_for_status()
             data = response.json()
@@ -161,7 +168,7 @@ class ModelCostManager:
             with self.lock:
                 with open(self.cache_file_path, "w", encoding="UTF-8") as cache_file:
                     if Config.DEBUG:
-                        print("**DEBUG: Writing costs to json file!")
+                        print(f"{Config.DEBUG_PREFIX} Writing costs to json file!")
                     json.dump(data, cache_file)
 
             return data
@@ -175,13 +182,75 @@ class ModelCostManager:
                         self.cache_file_path + ".bkp", "r", encoding="UTF-8"
                     ) as cache_file:
                         if Config.DEBUG:
-                            print("**DEBUG: Reading costs json file from backup!")
+                            print(
+                                f"{Config.DEBUG_PREFIX} Reading costs json file from backup!"
+                            )
                         return json.load(cache_file)
                 else:
                     raise e
 
+    def levenshtein_distance(self, s1, s2):
+        m, n = len(s1), len(s2)
+        dp = [[0] * (n + 1) for _ in range(m + 1)]
+
+        for i in range(m + 1):
+            dp[i][0] = i
+        for j in range(n + 1):
+            dp[0][j] = j
+
+        for i in range(1, m + 1):
+            for j in range(1, n + 1):
+                cost = 0 if s1[i - 1] == s2[j - 1] else 1
+                dp[i][j] = min(
+                    dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost
+                )
+
+        return dp[m][n]
+
+    def _find_best_match(self, query: str, json_data) -> str:
+        pattern = re.compile(r"^" + re.escape(query) + r"$", re.IGNORECASE)
+        best_match = None
+        for key in list(json_data.keys()):
+            if pattern.match(key):
+                return key
+        # Fallback to levenshtein distance matching if no exact match is found
+        threshold_ratio = 0.6 if len(query) < 15 else 0.3
+        min_distance = float("inf")
+        best_match = None
+        threshold = round(len(query) * threshold_ratio)
+        for key in json_data.keys():
+            dist = self.levenshtein_distance(query.lower(), key.lower())
+            if dist < min_distance:
+                min_distance = dist
+                best_match = key
+        if min_distance > threshold:
+            return None  # No match found within the threshold
+        return best_match
+
     def get_model_data(self, model):
-        return self.get_cost_data().get(model, {})
+        json_data = self.get_cost_data()
+
+        if model in ModelCostManager._best_match_cache:
+            if Config.DEBUG:
+                print(
+                    f"{Config.DEBUG_PREFIX} Using cached costs for model named '{model}'"
+                )
+            best_match = ModelCostManager._best_match_cache[model]
+        else:
+            if Config.DEBUG:
+                print(
+                    f"{Config.DEBUG_PREFIX} Searching best match in costs file for model named '{model}'"
+                )
+            best_match = self._find_best_match(model, json_data)
+            ModelCostManager._best_match_cache[model] = best_match
+
+        if best_match is None:
+            return {}
+
+        if Config.DEBUG:
+            print(f"{Config.DEBUG_PREFIX} Using costs from '{best_match}'")
+
+        return json_data.get(best_match, {})
 
 
 class CostCalculator:
@@ -196,8 +265,7 @@ class CostCalculator:
     ) -> Decimal:
         model_pricing_data = self.model_cost_manager.get_model_data(model)
         if not model_pricing_data:
-            if Config.DEBUG:
-                print(f"**DEBUG: Model {model} not found in costs json file!")
+            print(f"{Config.INFO_PREFIX} Model '{model}' not found in costs json file!")
         input_cost_per_token = Decimal(
             str(model_pricing_data.get("input_cost_per_token", 0))
         )
@@ -243,16 +311,13 @@ class Filter:
         self.input_tokens = 0
         pass
 
-    def _sanitize_model_name(self, model):
-        name = model
-        if name.startswith("anthropic."):
-            name = name.replace("anthropic.", "")
+    def _sanitize_model_name(self, name: str) -> str:
+        if name.startswith("openai"):
+            name = name.replace("openai", "")
         if name.startswith("google_genai."):
             name = name.replace("google_genai.", "")
         if name.endswith("-tuned"):
             name = name[:-6]
-        if name.endswith("-latest"):
-            name = name[:-7]
         return name.lower().strip()
 
     def _remove_roles(self, content):
@@ -268,22 +333,21 @@ class Filter:
 
         return "\n".join([process_line(line) for line in content.split("\n")])
 
-    def _get_model_and_encoding(self, body):
-        model = "gpt-4o"
+    def _get_model(self, body):
         if "model" in body:
-            model = self._sanitize_model_name(body["model"])
-        enc = get_encoding(model)
-        return model, enc
+            return self._sanitize_model_name(body["model"])
+        return None
 
     async def inlet(
         self,
         body: dict,
         __event_emitter__: Callable[[Any], Awaitable[None]] = None,
         __model__: Optional[dict] = None,
+        __user__: Optional[dict] = None,
     ) -> dict:
 
         Config.DEBUG = self.valves.debug
-        _, enc = self._get_model_and_encoding(body)
+        enc = tiktoken.get_encoding("cl100k_base")
         input_content = self._remove_roles(
             get_messages_content(body["messages"])
         ).strip()
@@ -298,6 +362,11 @@ class Filter:
                 },
             }
         )
+
+        # add user email to payload in order to track costs
+        if __user__:
+            if "email" in __user__:
+                body["user"] = __user__["email"]
 
         self.start_time = time.time()
 
@@ -324,7 +393,8 @@ class Filter:
             }
         )
 
-        model, enc = self._get_model_and_encoding(body)
+        model = self._get_model(body)
+        enc = tiktoken.get_encoding("cl100k_base")
         output_tokens = len(enc.encode(get_last_assistant_message(body["messages"])))
 
         await __event_emitter__(
