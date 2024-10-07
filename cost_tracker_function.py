@@ -73,7 +73,12 @@ class UserCostManager:
             json.dump(costs, cost_file, indent=4)
 
     def update_user_cost(
-        self, user_email, model, input_tokens, output_tokens, total_cost
+        self,
+        user_email: str,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        total_cost: Decimal,
     ):
         costs = self._read_costs()
         timestamp = datetime.now().isoformat()
@@ -186,7 +191,9 @@ class CostCalculator:
         self.model_cost_manager = model_cost_manager
         self.user_cost_manager = user_cost_manager
 
-    def calculate_costs(self, model, input_tokens, output_tokens, compensation):
+    def calculate_costs(
+        self, model: str, input_tokens: int, output_tokens: int, compensation: float
+    ) -> Decimal:
         model_pricing_data = self.model_cost_manager.get_model_data(model)
         if not model_pricing_data:
             if Config.DEBUG:
@@ -342,7 +349,7 @@ class Filter:
                     model,
                     self.input_tokens,
                     output_tokens,
-                    float(total_cost),
+                    total_cost,
                 )
             except Exception as _:
                 print("**ERROR: Unable to update user cost file!")
