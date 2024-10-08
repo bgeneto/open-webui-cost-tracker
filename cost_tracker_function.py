@@ -4,7 +4,7 @@ description: This function is designed to manage and calculate the costs associa
 author: bgeneto
 author_url: https://github.com/bgeneto/open-webui-cost-tracker
 funding_url: https://github.com/open-webui
-version: 0.2.1
+version: 0.2.2
 license: MIT
 requirements: requests, tiktoken, cachetools, pydantic
 environment_variables:
@@ -16,7 +16,6 @@ disclaimer: This function is provided as is without any guarantees.
 import hashlib
 import json
 import os
-import re
 import time
 from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
@@ -37,8 +36,8 @@ class Config:
     CACHE_TTL = 432000  # try to keep model pricing json file for 5 days in the cache.
     CACHE_MAXSIZE = 16
     DECIMALS = "0.00000001"
-    DEBUG_PREFIX = "DEBUG:    " + __name__ + " - "
-    INFO_PREFIX = "INFO:     " + __name__ + " - "
+    DEBUG_PREFIX = "DEBUG:    " + __name__ + " -"
+    INFO_PREFIX = "INFO:     " + __name__ + " -"
     DEBUG = False
 
 
@@ -208,23 +207,35 @@ class ModelCostManager:
         return dp[m][n]
 
     def _find_best_match(self, query: str, json_data) -> str:
-        pattern = re.compile(r"^" + re.escape(query) + r"$", re.IGNORECASE)
-        best_match = None
-        for key in list(json_data.keys()):
-            if pattern.match(key):
-                return key
-        # Fallback to levenshtein distance matching if no exact match is found
+        # Exact match search
+        query_lower = query.lower()
+        keys_lower = {key.lower(): key for key in json_data.keys()}
+
+        if query_lower in keys_lower:
+            return keys_lower[query_lower]
+
+        # Fallback to Levenshtein distance matching if no exact match is found
         threshold_ratio = 0.6 if len(query) < 15 else 0.3
         min_distance = float("inf")
         best_match = None
         threshold = round(len(query) * threshold_ratio)
-        for key in json_data.keys():
-            dist = self.levenshtein_distance(query.lower(), key.lower())
+
+        start = time.time()
+        distances = (self.levenshtein_distance(query_lower, key) for key in keys_lower)
+        for key, dist in zip(keys_lower.values(), distances):
             if dist < min_distance:
                 min_distance = dist
                 best_match = key
+            if dist < 2:  # Early termination for (almost) exact match
+                return key
+        end = time.time()
+        if Config.DEBUG:
+            print(
+                f"{Config.DEBUG_PREFIX} Levenshtein distance search took {end - start:.3f} seconds"
+            )
         if min_distance > threshold:
             return None  # No match found within the threshold
+
         return best_match
 
     def get_model_data(self, model):
@@ -381,6 +392,10 @@ class Filter:
         # add user email to payload in order to track costs
         if __user__:
             if "email" in __user__:
+                if Config.DEBUG:
+                    print(
+                        f"{Config.DEBUG_PREFIX} Adding email to request body: {__user__['email']}"
+                    )
                 body["user"] = __user__["email"]
 
         self.start_time = time.time()
