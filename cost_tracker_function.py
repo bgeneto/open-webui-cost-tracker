@@ -312,12 +312,27 @@ class Filter:
         pass
 
     def _sanitize_model_name(self, name: str) -> str:
-        if name.startswith("openai"):
-            name = name.replace("openai", "")
-        if name.startswith("google_genai."):
-            name = name.replace("google_genai.", "")
-        if name.endswith("-tuned"):
-            name = name[:-6]
+        """Sanitize model name by removing prefixes and suffixes
+
+        Args:
+            name (str): model name
+
+        Returns:
+            str: sanitized model name
+        """
+        prefixes = [
+            "openai",
+            "github",
+            "google_genai",
+        ]
+        suffixes = ["-tuned"]
+        # remove prefixes and suffixes
+        for prefix in prefixes:
+            if name.startswith(prefix):
+                name = name[len(prefix) :]
+        for suffix in suffixes:
+            if name.endswith(suffix):
+                name = name[: -len(suffix)]
         return name.lower().strip()
 
     def _remove_roles(self, content):
